@@ -280,7 +280,7 @@ bool CallGraphDOTPrinter::runOnModule(Module &M) {
   CallGraphDOTInfo CFGInfo(&M, &CG, LookupBFI);
 
   if (!EC)
-    WriteGraph(File, &CFGInfo);
+    WriteGraphAllConnectedComponent(File, &CFGInfo);
   else
     errs() << "  error opening file for writing!";
   errs() << "\n";

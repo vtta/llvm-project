@@ -22,15 +22,18 @@
 #ifndef LLVM_SUPPORT_GRAPHWRITER_H
 #define LLVM_SUPPORT_GRAPHWRITER_H
 
+#include "llvm/ADT/EquivalenceClasses.h"
 #include "llvm/ADT/GraphTraits.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/DOTGraphTraits.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cstddef>
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -125,6 +128,60 @@ public:
     writeFooter();
   }
 
+  // Depth first search, connect a node with every node reachable from it
+  // Node must be valid
+  void connectNodeWithChildren(EquivalenceClasses<NodeRef> &CC, NodeRef Node) {
+    child_iterator EI = GTraits::child_begin(Node);
+    child_iterator EE = GTraits::child_end(Node);
+    for (; EI != EE; ++EI) {
+      NodeRef TargetNode = *EI;
+      if (CC.findValue(TargetNode) != CC.end()) {
+          CC.unionSets(Node, TargetNode);
+      } else {
+        // outs() << "Node" << static_cast<const void *>(Node) << " -> " << "Node" << static_cast<const void *>(TargetNode) << "\n";
+        CC.insert(TargetNode);
+        CC.unionSets(Node, TargetNode);
+        connectNodeWithChildren(CC, TargetNode);
+      }
+    }
+  }
+
+  void writeComponent(EquivalenceClasses<NodeRef> const &CC, NodeRef Leader,
+                      const std::string &Title) {
+    std::stringstream buf(Title);
+    buf << "Node" << static_cast<const void *>(Leader);
+    // Output the header for the graph...
+    writeHeader(buf.str());
+
+    // Emit all of the nodes in a single Component...
+    writeNodesIf([&](NodeRef Node) { return CC.isEquivalent(Leader, Node); });
+
+    // Output any customizations on the graph
+    DOTGraphTraits<GraphType>::addCustomGraphFeatures(G, *this);
+
+    // Output the end of the graph
+    writeFooter();
+  }
+
+  void writeGraphAllConnectedComponent(const std::string &Title = "") {
+    EquivalenceClasses<NodeRef> CC;
+    // for (const auto Node : nodes<GraphType>(G))
+    //   outs() << "Node" << static_cast<const void *>(Node) << " "
+    //          << isNodeHidden(Node) << "\n";
+    for (const auto Node : nodes<GraphType>(G))
+      if (!isNodeHidden(Node)) {
+        CC.insert(Node);
+        connectNodeWithChildren(CC, Node);
+      }
+    // outs() << CC.getNumClasses() << "\n";
+    // We cannot copy ECValue, so iterator is the only way
+    auto EI = CC.begin();
+    auto EE = CC.end();
+    for (; EI != EE; ++EI)
+      if (EI->isLeader())
+        writeComponent(CC, EI->getData(), Title);
+  }
+
   void writeHeader(const std::string &Title) {
     std::string GraphName(DTraits.getGraphName(G));
 
@@ -155,6 +212,13 @@ public:
     // Loop over the graph, printing it out...
     for (const auto Node : nodes<GraphType>(G))
       if (!isNodeHidden(Node))
+        writeNode(Node);
+  }
+
+  template <typename Predicate> void writeNodesIf(Predicate pred) {
+    // Loop over the graph, printing it out...
+    for (const auto Node : nodes<GraphType>(G))
+      if (!isNodeHidden(Node) && pred(Node))
         writeNode(Node);
   }
 
@@ -299,19 +363,31 @@ public:
   /// getOStream - Get the raw output stream into the graph file. Useful to
   /// write fancy things using addCustomGraphFeatures().
   raw_ostream &getOStream() {
-    return O;
+     return O; 
   }
 };
 
-template<typename GraphType>
+template <typename GraphType>
 raw_ostream &WriteGraph(raw_ostream &O, const GraphType &G,
+                        bool ShortNames = false, const Twine &Title = "") {
+  // Start the graph emission process...
+  GraphWriter<GraphType> W(O, G, ShortNames);
+
+  // Emit the graph.
+  W.writeGraph(Title.str());
+
+    return O;
+  }
+
+template <typename GraphType>
+raw_ostream &WriteGraphAllConnectedComponent(raw_ostream &O, const GraphType &G,
                         bool ShortNames = false,
                         const Twine &Title = "") {
   // Start the graph emission process...
   GraphWriter<GraphType> W(O, G, ShortNames);
 
   // Emit the graph.
-  W.writeGraph(Title.str());
+  W.writeGraphAllConnectedComponent(Title.str());
 
   return O;
 }
