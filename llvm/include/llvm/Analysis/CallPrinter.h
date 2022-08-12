@@ -26,6 +26,13 @@ public:
   PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
 };
 
+/// Pass for printing the call graph of each function to a dot file
+class PerFunctionCallGraphDOTPrinterPass
+    : public PassInfoMixin<PerFunctionCallGraphDOTPrinterPass> {
+public:
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+};
+
 /// Pass for viewing the call graph
 class CallGraphViewerPass : public PassInfoMixin<CallGraphViewerPass> {
 public:
@@ -34,6 +41,7 @@ public:
 
 ModulePass *createCallGraphViewerPass();
 ModulePass *createCallGraphDOTPrinterPass();
+ModulePass *createPerFunctionCallGraphDOTPrinterPass();
 
 } // end namespace llvm
 

@@ -101,6 +101,7 @@ void initializeCFIInstrInserterPass(PassRegistry&);
 void initializeCFLAndersAAWrapperPassPass(PassRegistry&);
 void initializeCFLSteensAAWrapperPassPass(PassRegistry&);
 void initializeCallGraphDOTPrinterPass(PassRegistry&);
+void initializePerFunctionCallGraphDOTPrinterPass(PassRegistry&);
 void initializeCallGraphPrinterLegacyPassPass(PassRegistry&);
 void initializeCallGraphViewerPass(PassRegistry&);
 void initializeCallGraphWrapperPassPass(PassRegistry&);

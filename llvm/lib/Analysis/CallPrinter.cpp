@@ -24,6 +24,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/DOTGraphTraits.h"
 #include "llvm/Support/GraphWriter.h"
+#include <filesystem>
 
 using namespace llvm;
 
@@ -240,6 +241,37 @@ void doCallGraphDOTPrinting(
   errs() << "\n";
 }
 
+void doPerFunctionCallGraphDOTPrinting(
+    Module &M, function_ref<BlockFrequencyInfo *(Function &)> LookupBFI) {
+  CallGraph CG(M);
+  if (CG.begin() == CG.end()) {
+    errs() << "Skiping empty function call graph\n";
+    return;
+  }
+
+  std::vector<CallGraph> FnGraphs = CG.generatePerFunctionCallGraph();
+  for (auto &&FG : FnGraphs) {
+    std::ostringstream Filename;
+    if (!CallGraphDotFilenamePrefix.empty())
+      Filename << CallGraphDotFilenamePrefix << "."
+               << (void *)(FG.begin()->first) << ".fncallgraph.dot";
+    else
+      Filename << M.getModuleIdentifier() << "." << (void *)(FG.begin()->first)
+               << ".fncallgraph.dot";
+    errs() << "Writing '" << Filename.str() << "'...";
+
+    std::error_code EC;
+    raw_fd_ostream File(Filename.str(), EC, sys::fs::OF_Text);
+
+    CallGraphDOTInfo CFGInfo(&M, &FG, LookupBFI);
+    if (!EC)
+      WriteGraph(File, &CFGInfo);
+    else
+      errs() << "  error opening file for writing!";
+    errs() << "\n";
+  }
+}
+
 void viewCallGraph(Module &M,
                    function_ref<BlockFrequencyInfo *(Function &)> LookupBFI) {
   CallGraph CG(M);
@@ -262,6 +294,20 @@ PreservedAnalyses CallGraphDOTPrinterPass::run(Module &M,
   };
 
   doCallGraphDOTPrinting(M, LookupBFI);
+
+  return PreservedAnalyses::all();
+}
+
+PreservedAnalyses
+PerFunctionCallGraphDOTPrinterPass::run(Module &M, ModuleAnalysisManager &AM) {
+  FunctionAnalysisManager &FAM =
+      AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+
+  auto LookupBFI = [&FAM](Function &F) {
+    return &FAM.getResult<BlockFrequencyAnalysis>(F);
+  };
+
+  doPerFunctionCallGraphDOTPrinting(M, LookupBFI);
 
   return PreservedAnalyses::all();
 }
@@ -336,6 +382,31 @@ bool CallGraphDOTPrinter::runOnModule(Module &M) {
   return false;
 }
 
+class PerFunctionCallGraphDOTPrinter : public ModulePass {
+public:
+  static char ID;
+  PerFunctionCallGraphDOTPrinter() : ModulePass(ID) {}
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override;
+  bool runOnModule(Module &M) override;
+};
+
+void PerFunctionCallGraphDOTPrinter::getAnalysisUsage(AnalysisUsage &AU) const {
+  ModulePass::getAnalysisUsage(AU);
+  AU.addRequired<BlockFrequencyInfoWrapperPass>();
+  AU.setPreservesAll();
+}
+
+bool PerFunctionCallGraphDOTPrinter::runOnModule(Module &M) {
+  auto LookupBFI = [this](Function &F) {
+    return &this->getAnalysis<BlockFrequencyInfoWrapperPass>(F).getBFI();
+  };
+
+  doPerFunctionCallGraphDOTPrinting(M, LookupBFI);
+
+  return false;
+}
+
 } // end anonymous namespace
 
 char CallGraphViewer::ID = 0;
@@ -346,6 +417,10 @@ char CallGraphDOTPrinter::ID = 0;
 INITIALIZE_PASS(CallGraphDOTPrinter, "dot-callgraph",
                 "Print call graph to 'dot' file", false, false)
 
+char PerFunctionCallGraphDOTPrinter::ID = 0;
+INITIALIZE_PASS(PerFunctionCallGraphDOTPrinter, "dot-fn-callgraph",
+                "Print per function call graph to 'dot' files", false, false)
+
 // Create methods available outside of this file, to use them
 // "include/llvm/LinkAllPasses.h". Otherwise the pass would be deleted by
 // the link time optimization.
@@ -354,4 +429,8 @@ ModulePass *llvm::createCallGraphViewerPass() { return new CallGraphViewer(); }
 
 ModulePass *llvm::createCallGraphDOTPrinterPass() {
   return new CallGraphDOTPrinter();
+}
+
+ModulePass *llvm::createPerFunctionCallGraphDOTPrinterPass() {
+  return new PerFunctionCallGraphDOTPrinter();
 }

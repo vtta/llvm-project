@@ -86,6 +86,9 @@ class CallGraph {
   /// or calling an external function.
   std::unique_ptr<CallGraphNode> CallsExternalNode;
 
+  /// only to be used in generatePerFunctionCallGraph to generate an empty graph
+  explicit CallGraph(Module &M, std::nullptr_t);
+
 public:
   explicit CallGraph(Module &M);
   CallGraph(CallGraph &&Arg);
@@ -157,6 +160,10 @@ public:
   /// Add a function to the call graph, and link the node to all of the
   /// functions that it calls.
   void addToCallGraph(Function *F);
+
+  /// Break a call graph for an entire module to seperate graphs, one for each
+  /// function call tree
+  std::vector<CallGraph> generatePerFunctionCallGraph();
 };
 
 /// A node in the call graph for a module.

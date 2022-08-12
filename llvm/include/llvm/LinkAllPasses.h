@@ -83,6 +83,7 @@ namespace {
       (void) llvm::createBoundsCheckingLegacyPass();
       (void) llvm::createBreakCriticalEdgesPass();
       (void) llvm::createCallGraphDOTPrinterPass();
+      (void) llvm::createPerFunctionCallGraphDOTPrinterPass();
       (void) llvm::createCallGraphViewerPass();
       (void) llvm::createCFGSimplificationPass();
       (void) llvm::createCFLAndersAAWrapperPass();

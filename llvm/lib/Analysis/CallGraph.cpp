@@ -22,12 +22,18 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
+#include <memory>
+#include <queue>
+#include <utility>
 
 using namespace llvm;
 
 //===----------------------------------------------------------------------===//
 // Implementations of the CallGraph class methods.
 //
+CallGraph::CallGraph(Module &M, std::nullptr_t)
+    : M(M), ExternalCallingNode(getOrInsertFunction(nullptr)),
+      CallsExternalNode(std::make_unique<CallGraphNode>(this, nullptr)) {}
 
 CallGraph::CallGraph(Module &M)
     : M(M), ExternalCallingNode(getOrInsertFunction(nullptr)),
@@ -178,6 +184,36 @@ CallGraphNode *CallGraph::getOrInsertFunction(const Function *F) {
   assert((!F || F->getParent() == &M) && "Function not in current module!");
   CGN = std::make_unique<CallGraphNode>(this, const_cast<Function *>(F));
   return CGN.get();
+}
+
+// generatePerFunctionCallGraph - Breakdown the per module graph to per function
+// graph. The nodes with 0 in-degree and >= 1 out-degree will be the root of a
+// function call graph.
+std::vector<CallGraph> CallGraph::generatePerFunctionCallGraph() {
+  std::map<Function const *, int> OutDegree, InDegree;
+  for (auto const &[Src, N] : FunctionMap) {
+    for (auto const &[CallerIP, CalleeNode] : N->CalledFunctions) {
+      // find out only those real ones
+      if (!CallerIP.has_value()) {
+        continue;
+      }
+      Function *Dest = CalleeNode->F;
+      ++OutDegree[Src];
+      ++InDegree[Dest];
+    }
+  }
+  std::vector<CallGraph> R;
+  for (auto const &[Src, OD] : OutDegree) {
+    // >= 1 out-degree 0 in-degree
+    if (OD < 1 || InDegree[Src]) {
+      continue;
+    }
+    // create a call graph for call tree originated from Src using bfs
+    CallGraph FnGraph(M, nullptr);
+    FnGraph.addToCallGraph((Function *)Src);
+    R.push_back(std::move(FnGraph));
+  }
+  return R;
 }
 
 //===----------------------------------------------------------------------===//
