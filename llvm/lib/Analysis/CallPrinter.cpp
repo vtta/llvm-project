@@ -190,8 +190,7 @@ struct DOTGraphTraits<CallGraphDOTInfo *> : public DefaultDOTGraphTraits {
       return "";
 
     uint64_t Counter = getNumOfCalls(*Caller, *Callee);
-    double Width =
-        1 + 2 * (double(Counter) / CGInfo->getMaxFreq());
+    double Width = 1 + 2 * (double(Counter) / CGInfo->getMaxFreq());
     std::string Attrs = "label=\"" + std::to_string(Counter) +
                         "\" penwidth=" + std::to_string(Width);
     return Attrs;
@@ -254,9 +253,19 @@ void doPerFunctionCallGraphDOTPrinting(
     std::ostringstream Filename;
     if (!CallGraphDotFilenamePrefix.empty())
       Filename << CallGraphDotFilenamePrefix << "."
-               << (void *)(FG.begin()->first) << ".fncallgraph.dot";
+               << FG.getExternalCallingNode()
+                      ->begin()
+                      ->second->getFunction()
+                      ->getName()
+                      .data()
+               << ".fncallgraph.dot";
     else
-      Filename << M.getModuleIdentifier() << "." << (void *)(FG.begin()->first)
+      Filename << M.getModuleIdentifier() << "."
+               << FG.getExternalCallingNode()
+                      ->begin()
+                      ->second->getFunction()
+                      ->getName()
+                      .data()
                << ".fncallgraph.dot";
     errs() << "Writing '" << Filename.str() << "'...";
 

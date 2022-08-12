@@ -163,7 +163,7 @@ public:
 
   /// Break a call graph for an entire module to seperate graphs, one for each
   /// function call tree
-  std::vector<CallGraph> generatePerFunctionCallGraph();
+  std::vector<CallGraph> generatePerFunctionCallGraph() const;
 };
 
 /// A node in the call graph for a module.
@@ -497,8 +497,8 @@ struct GraphTraits<CallGraph *> : public GraphTraits<CallGraphNode *> {
 };
 
 template <>
-struct GraphTraits<const CallGraph *> : public GraphTraits<
-                                            const CallGraphNode *> {
+struct GraphTraits<const CallGraph *>
+    : public GraphTraits<const CallGraphNode *> {
   using PairTy =
       std::pair<const Function *const, std::unique_ptr<CallGraphNode>>;
 

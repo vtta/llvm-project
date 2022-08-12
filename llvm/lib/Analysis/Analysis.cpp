@@ -26,6 +26,7 @@ void llvm::initializeAnalysis(PassRegistry &Registry) {
   initializeBranchProbabilityInfoWrapperPassPass(Registry);
   initializeCallGraphWrapperPassPass(Registry);
   initializeCallGraphDOTPrinterPass(Registry);
+  initializePerFunctionCallGraphDOTPrinterPass(Registry);
   initializeCallGraphPrinterLegacyPassPass(Registry);
   initializeCallGraphViewerPass(Registry);
   initializeCostModelAnalysisPass(Registry);

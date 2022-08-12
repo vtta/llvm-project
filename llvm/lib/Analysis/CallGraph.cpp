@@ -189,28 +189,48 @@ CallGraphNode *CallGraph::getOrInsertFunction(const Function *F) {
 // generatePerFunctionCallGraph - Breakdown the per module graph to per function
 // graph. The nodes with 0 in-degree and >= 1 out-degree will be the root of a
 // function call graph.
-std::vector<CallGraph> CallGraph::generatePerFunctionCallGraph() {
-  std::map<Function const *, int> OutDegree, InDegree;
-  for (auto const &[Src, N] : FunctionMap) {
-    for (auto const &[CallerIP, CalleeNode] : N->CalledFunctions) {
-      // find out only those real ones
-      if (!CallerIP.has_value()) {
+std::vector<CallGraph> CallGraph::generatePerFunctionCallGraph() const {
+  std::map<CallGraphNode const *, int> OutDegree, InDegree;
+  for (auto &[_, Src] : *ExternalCallingNode) {
+    for (auto [Caller, Dest] : *(*this)[Src->getFunction()]) {
+      if (!Caller.has_value()) {
         continue;
       }
-      Function *Dest = CalleeNode->F;
       ++OutDegree[Src];
       ++InDegree[Dest];
     }
   }
   std::vector<CallGraph> R;
   for (auto const &[Src, OD] : OutDegree) {
+    errs() << "Found fn callgraph root " << Src->getFunction() << "\n";
     // >= 1 out-degree 0 in-degree
     if (OD < 1 || InDegree[Src]) {
       continue;
     }
     // create a call graph for call tree originated from Src using bfs
     CallGraph FnGraph(M, nullptr);
-    FnGraph.addToCallGraph((Function *)Src);
+    std::queue<CallGraphNode const *> Todo;
+    std::set<CallGraphNode const *> Added;
+    Todo.push(Src);
+    while (!Todo.empty()) {
+      CallGraphNode const *C = Todo.front();
+      Todo.pop();
+      if (Added.find(C) != Added.end() || !C->getFunction()) {
+        continue;
+      }
+      FnGraph.addToCallGraph(C->getFunction());
+      Added.insert(C);
+      for (auto [_, I] : *C) {
+        Todo.push(I);
+      }
+    }
+    errs() << "    Found " << FnGraph.FunctionMap.size() << " nodes\n";
+    for (auto &[_, Src] : FnGraph) {
+      for (auto &[_, Dest] : *FnGraph[Src->getFunction()]) {
+        errs() << "    Found edge " << Src->getFunction() << " -> "
+               << Dest->getFunction() << "\n";
+      }
+    }
     R.push_back(std::move(FnGraph));
   }
   return R;
